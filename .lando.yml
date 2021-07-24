@@ -1,0 +1,115 @@
+# Give this Lando project a unique name
+name: magento2
+
+# Start with the default LEMP recipe
+recipe: lemp
+
+proxy:
+  # Set Magento URL
+  appserver_nginx:
+    - www.magento2.lndo.site
+  pma:
+    - pma.magento2.lndo.site
+  rabbitmq:
+    - rabbitmq.magento2.lndo.site
+  mailhog:
+    - mail.magento2.lndo.site
+
+# Configure the LEMP recipe
+config:
+  # PHP 7.2 for Magento 2.4 - adjust as needed
+  php: '7.4'
+  webroot: pub
+  database: mysql
+
+  # Optionally activate xdebug
+  xdebug: true
+
+  # Optionally mix in your own config files
+  #
+  # If omitted this will use "sane defaults" for your recipe type
+  config:
+    # Relative to Magento project root
+    vhosts: .lando/config/nginx.conf
+
+services:
+  appserver:
+    # This will only run the first time `lando start` is executed or on `lando rebuild`
+    build_as_root:
+      # Install Magento-required xsl extension
+      - apt-get update -y -q && apt-get install -y libxslt-dev && docker-php-ext-install xsl
+      - docker-php-ext-install sockets
+
+  # Provide some custom options for the database service
+  database:
+    app_mount: disabled
+    type: mariadb
+    creds:
+      user: magento
+      password: magento
+      database: magento
+
+  redis:
+    app_mount: disabled
+    type: redis:5
+    persist: false
+
+  elasticsearch:
+    type: elasticsearch:7
+    app_mount: disabled
+    portforward: false
+
+  rabbitmq:
+    type: compose
+    services:
+      # Grab RabbitMQ management image
+      image: "rabbitmq:3-management"
+      hostname: "rabbitmq"
+
+      # Start the server for RabbitMQ
+      command: rabbitmq-server
+
+      # Expose RabbitMQ Ports
+      ports:
+        - '15672:15672'
+        - '5672:5672'
+
+      # Link RabbitMQ Configs
+      volumes:
+        - .lando/config/rabbitmq-isolated.conf:/etc/rabbitmq/rabbitmq.config
+      labels:
+        NAME: "rabbitmq"
+
+  pma:
+    app_mount: disabled
+    scanner: false
+    type: phpmyadmin
+    hosts:
+      - database
+
+  mailhog:
+    app_mount: disabled
+    scanner: false
+    type: mailhog:v1.0.0
+    portforward: false
+    hogfrom:
+      - appserver
+
+events:
+  post-start:
+    - rabbitmq: echo -e "\n\e[36mRABBITMQ IP ADDRESS:\e[32m"
+    - rabbitmq: hostname -i | cut -d' ' -f1
+
+tooling:
+  vim:
+    service: appserver
+  magento:
+    description: Execute ./bin/magento commands
+    cmd: test -f /app/bin/magento && /app/bin/magento
+    service: appserver
+  # Set up command "Lando rabbit" for basic RabbitMQ commands
+  rabbit:
+    service: rabbitmq
+    # User must be root to prevent erlang cookie error
+    user: root
+    cmd: rabbitmqctl
