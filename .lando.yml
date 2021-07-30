@@ -39,6 +39,7 @@ services:
       # Install Magento-required xsl extension
       - apt-get update -y -q && apt-get install -y libxslt-dev && docker-php-ext-install xsl
       - docker-php-ext-install sockets
+      - apt-get install vim -y
 
   # Provide some custom options for the database service
   database:
@@ -101,12 +102,6 @@ events:
     - rabbitmq: hostname -i | cut -d' ' -f1
 
 tooling:
-  vim:
-    service: appserver
-  magento:
-    description: Execute ./bin/magento commands
-    cmd: test -f /app/bin/magento && /app/bin/magento
-    service: appserver
   # Set up command "Lando rabbit" for basic RabbitMQ commands
   rabbit:
     service: rabbitmq
